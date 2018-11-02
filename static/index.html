@@ -30,6 +30,15 @@
             height: 60px;
             position: absolute;
         }
+        #to0 {
+            position: absolute;
+            border: solid 5px red;
+        }
+        #area {
+            position: absolute;
+            background-color: lightgray;
+            z-index: -1000;
+        }
     </style>
 </head>
 <body>
@@ -54,13 +63,16 @@
     left: <strong id="left">unknown</strong><br/>
 </div>
 
+<div id="area" oncontextmenu="return false;" onselectstart="return false"></div>
+
 <div style="margin-left: 20px;">
-    <h1>Message:</h1>
+    <h1>Message:<strong style="font-size: 30%; margin-left: 20px; color: red;" id="wsstatus">disconnected</strong></h1>
     <h3>current mode: <strong style="color: green;" id="cmode">touch</strong></h3>
     <p style="color: grey;">click ball to toggle mode</p>
 </div>
 
 <div id="fixball" oncontextmenu="return false;" onselectstart="return false"></div>
+<div id="to0" oncontextmenu="return false;" onselectstart="return false"></div>
 <div id="ball" oncontextmenu="return false;" onselectstart="return false"></div>
 
 <script src="/static/js/jquery.min.js"></script>
@@ -137,6 +149,7 @@ function updatedraw() {
 
 var scw;
 var sch;
+var scmin = 0;
 var ball;
 var mode = "touch";  // or "gravity"
 var ispressed = false;
@@ -144,6 +157,7 @@ var moved = false;
 var spfront = 0;
 var spleft = 0;
 var upds = false;
+var to0ratio = 0.3;
 function mtmove(e) {
     if (ispressed) {
         // console.log(e);
@@ -154,11 +168,22 @@ function mtmove(e) {
             cx = e.touches[0].pageX;
             cy = e.touches[0].pageY;
         }
-        ball.css('top', cy - 30);
-        ball.css('left', cx - 30);
-        spfront = - (cy - sch / 2);
-        spleft = - (cx - scw / 2);
-        upds = true;
+        let f = cy - sch / 2;
+        let l = cx - scw / 2;
+        if (Math.sqrt(f*f + l*l) <= scmin/2) {
+            ball.css('top', cy - 30);
+            ball.css('left', cx - 30);
+            let nfront = - (cy - sch / 2) / scmin * 2;
+            let nleft = - (cx - scw / 2) / scmin * 2;
+            if (spfront != nfront && spleft != nleft) {
+                spfront = nfront;
+                spleft = nleft;
+                upds = true;
+            } else {
+                spfront = nfront;
+                spleft = nleft;
+            }
+        }
     }
 }
 function mtstart(e) {
@@ -169,10 +194,28 @@ function mtstart(e) {
 function mtend(e) {
     // console.log(e)
     ispressed = false;
+    if (Math.sqrt(spfront*spfront + spleft*spleft) <= to0ratio) {
+        ball.css('top', sch/2 - 30);
+        ball.css('left', scw/2 - 30);
+        spfront = 0;
+        spleft = 0;
+        upds = true;
+    }
 }
 $(function() {
     scw = $("body").width();
     sch = $("body").height();
+    scmin = Math.min(scw, sch);
+    $("#area").css("width", scmin);
+    $("#area").css("height", scmin);
+    $("#area").css("top", (sch - scmin) / 2);
+    $("#area").css("left", (scw - scmin) / 2);
+    $("#to0").css("width", scmin * to0ratio);
+    $("#to0").css("height", scmin * to0ratio);
+    $("#to0").css("left", scw/2 - (scmin * to0ratio)/2);
+    $("#to0").css("top", sch/2 - (scmin * to0ratio)/2);
+    $("#to0").css("border-radius", scmin * 0.3);
+    $("#area").css("border-radius", scmin / 2);
     ball = $("#ball")
     ball.css("left", scw/2 - 30);
     ball.css("top", sch/2 - 30);
@@ -207,9 +250,13 @@ $(function() {
     socketio = io.connect(location.protocol + '//' + document.domain + ':' + location.port + '/');
     socketio.on('connect', function(socket) {
         console.log('connected to server');
+        $("#wsstatus").css("color", "green");
+        $("#wsstatus").html("connected");
     });
     socketio.on('disconnect', function(socket) {
         console.log('disconnect from server');
+        $("#wsstatus").css("color", "red");
+        $("#wsstatus").html("disconnected");
     });
 })
 setInterval(function() {
