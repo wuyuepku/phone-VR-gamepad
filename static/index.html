@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>phone VR gamepad</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=0">
+    <link rel="icon" href="/static/icon.png" type="image/x-icon">
+    <link rel="shortcut icon" href="/static/icon.png" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #ball {
+            background-color: green;
+            border-radius: 30px;
+            border: 3px solid yellow;
+            width: 60px;
+            height: 60px;
+            position: absolute;
+            left: 0px;
+            top: 0px;
+        }
+        #fixball {
+            background-color: grey;
+            border-radius: 30px;
+            width: 60px;
+            height: 60px;
+            position: absolute;
+        }
+    </style>
+</head>
+<body>
+
+<div style="display:none;">
+    x: <strong id="x">unknown</strong><br/>
+    y: <strong id="y">unknown</strong><br/>
+    z: <strong id="z">unknown</strong><br/>
+    maxac: <strong id="maxac">unknown</strong><br/>
+    <br/>
+    α: <strong id="a">unknown</strong><br/>
+    β: <strong id="b">unknown</strong><br/>
+    γ: <strong id="c">unknown</strong><br/>
+    <br/>
+    fps: <strong id="fps">unknown</strong><br/>
+    <br/>
+    gx: <strong id="gx">unknown</strong><br/>
+    gy: <strong id="gy">unknown</strong><br/>
+    gz: <strong id="gz">unknown</strong><br/>
+    <br/>
+    front: <strong id="front">unknown</strong><br/>
+    left: <strong id="left">unknown</strong><br/>
+</div>
+
+<div style="margin-left: 20px;">
+    <h1>Message:</h1>
+    <h3>current mode: <strong style="color: green;" id="cmode">touch</strong></h3>
+    <p style="color: grey;">click ball to toggle mode</p>
+</div>
+
+<div id="fixball" oncontextmenu="return false;" onselectstart="return false"></div>
+<div id="ball" oncontextmenu="return false;" onselectstart="return false"></div>
+
+<script src="/static/js/jquery.min.js"></script>
+<script src="/static/js/bootstrap.min.js"></script>
+<script src="/static/js/jsrender.min.js"></script>
+<script src="/static/js/socket.io.min.js"></script>
+
+<script>
+
+var socketio = null;
+var maxac = 0;
+var cnt = 0;
+function computeori(x, y, z) {
+    // let l = Math.sqrt(x*x + y*y + z*z);
+    // let speed = Math.acos(z/l);
+    // $("#speed").html(speed);
+    // let theta = 0;
+    // if (x == 0) {
+    //     theta = (y > 0) ? 90 : -90;
+    // } else {
+    //     theta = Math.atan(y / x);
+    //     if (x < 0) theta += 180;
+    //     theta += 90;
+    // }
+    // $("#theta").html(theta);
+    $("#front").html(-y);
+    $("#left").html(x);
+}
+$(function() {
+    let url = location.protocol + '//' + document.domain + ':' + location.port + '/';
+    socketio = io.connect(url);
+    socketio.on('connect', function(socket) {
+        console.log('onedawn connected to server');
+    });
+    socketio.on('disconnect', function(socket) {
+        console.error('onedawn disconnect from server');
+    });
+    function deviceMotionHeadler(eventData){
+        cnt += 1;
+        // console.log(eventData);
+        let ac = eventData.acceleration
+        $("#x").html(ac.x);
+        $("#y").html(ac.y);
+        $("#z").html(ac.z);
+        let acval = Math.sqrt(ac.x*ac.x + ac.y*ac.y + ac.z*ac.z);
+        if (acval > maxac) {
+            maxac = acval;
+            $("#maxac").html(maxac);
+        }
+        let ro = eventData.rotationRate;
+        $("#a").html(ro.alpha);
+        $("#b").html(ro.beta);
+        $("#c").html(ro.gamma);
+        let gac = eventData.accelerationIncludingGravity;
+        // console.log(gac);
+        $("#gx").html(gac.x);
+        $("#gy").html(gac.y);
+        $("#gz").html(gac.z);
+
+        if (gac.z > 8) {  // 手机基本水平状态
+            computeori(gac.x, gac.y, gac.z);
+        }
+    }
+    window.addEventListener('devicemotion', deviceMotionHeadler, false);
+})
+setInterval(function() {
+    $("#fps").html(cnt);
+    cnt = 0;
+}, 1000);
+
+function updatedraw() {
+
+}
+
+var scw;
+var sch;
+var ball;
+var mode = "touch";  // or "gravity"
+var ispressed = false;
+var moved = false;
+var spfront = 0;
+var spleft = 0;
+var upds = false;
+function mtmove(e) {
+    if (ispressed) {
+        // console.log(e);
+        moved = true;
+        let cx = e.pageX;
+        let cy = e.pageY;
+        if (e.touches) {
+            cx = e.touches[0].pageX;
+            cy = e.touches[0].pageY;
+        }
+        ball.css('top', cy - 30);
+        ball.css('left', cx - 30);
+        spfront = - (cy - sch / 2);
+        spleft = - (cx - scw / 2);
+        upds = true;
+    }
+}
+function mtstart(e) {
+    // console.log(e)
+    moved = false;
+    ispressed = true;
+}
+function mtend(e) {
+    // console.log(e)
+    ispressed = false;
+}
+$(function() {
+    scw = $("body").width();
+    sch = $("body").height();
+    ball = $("#ball")
+    ball.css("left", scw/2 - 30);
+    ball.css("top", sch/2 - 30);
+    $("#fixball").css("left", scw/2 - 30);
+    $("#fixball").css("top", sch/2 - 30);
+    ball.on('click', function () {
+        if (!moved) {
+            if (mode == "touch") {
+                mode = "gravity"
+                ball.css('background-color', "red");
+            } else {
+                mode = "touch"
+                ball.css('background-color', "green");
+            }
+            $("#cmode").html(mode);
+        }
+    });
+    $("body").on('mousemove', mtmove);
+    $("body").on('touchmove', mtmove);
+    ball.on('mousemove', mtmove);
+    ball.on('touchmove', mtmove);
+    ball.on('mousedown', mtstart);
+    ball.on('touchstart', mtstart);
+    ball.on('mouseup', mtend);
+    ball.on('touchend', mtend);
+    $("body").on('mouseup', mtend);
+    $("body").on('touchend', mtend);
+})
+
+var socketio = null;
+$(function() {
+    socketio = io.connect(location.protocol + '//' + document.domain + ':' + location.port + '/');
+    socketio.on('connect', function(socket) {
+        console.log('connected to server');
+    });
+    socketio.on('disconnect', function(socket) {
+        console.log('disconnect from server');
+    });
+})
+setInterval(function() {
+    if (upds && socketio) {
+        socketio.emit("speed", {"front": spfront, "left": spleft});
+        upds = false;
+    }
+}, 200);
+
+
+</script>
+
+</body>
+</html>
