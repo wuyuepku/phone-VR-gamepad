@@ -85,21 +85,70 @@
 var socketio = null;
 var maxac = 0;
 var cnt = 0;
+var gravratio = 0.3;
+let gravi = 0;  // 60Hz sample
+let gravcntavr = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+function updategravspeed(front, left) {
+    if (gravi < gravcntavr.length) {
+        gravcntavr[gravi] = [front, left];
+        gravi += 1;
+        if (gravi >= gravcntavr.length) gravi = 0;
+    }
+    front = 0;
+    left = 0;
+    for (let i=0; i<gravcntavr.length; ++i) { front += gravcntavr[i][0]; left += gravcntavr[i][1]; }
+    front /= gravcntavr.length;
+    left /= gravcntavr.length;
+    let nfront = front * gravratio;
+    let nleft = left * gravratio;
+    if (Math.sqrt(nfront*nfront + nleft*nleft) < to0ratio) {
+        nfront = 0;
+        nleft = 0;
+    }
+    let a = Math.sqrt(nfront*nfront + nleft*nleft);
+    if (a > 1) {
+        nfront /= a;
+        nleft /= a;
+    }
+    if (nfront != spfront && nleft != spleft) {
+        spfront = nfront;
+        spleft = nleft;
+        ball.css('top', - spfront * scmin / 2 + sch/2 - 30);
+        ball.css('left', - spleft * scmin / 2 + scw/2 - 30);
+        upds = true;
+    }
+}
 function computeori(x, y, z) {
-    // let l = Math.sqrt(x*x + y*y + z*z);
-    // let speed = Math.acos(z/l);
-    // $("#speed").html(speed);
-    // let theta = 0;
-    // if (x == 0) {
-    //     theta = (y > 0) ? 90 : -90;
-    // } else {
-    //     theta = Math.atan(y / x);
-    //     if (x < 0) theta += 180;
-    //     theta += 90;
-    // }
-    // $("#theta").html(theta);
     $("#front").html(-y);
     $("#left").html(x);
+    updategravspeed(-y, x);
+}
+function deviceMotionHeadler(eventData){
+    if (mode != "gravity") return;
+    cnt += 1;
+    // console.log(eventData);
+    let ac = eventData.acceleration
+    $("#x").html(ac.x);
+    $("#y").html(ac.y);
+    $("#z").html(ac.z);
+    let acval = Math.sqrt(ac.x*ac.x + ac.y*ac.y + ac.z*ac.z);
+    if (acval > maxac) {
+        maxac = acval;
+        $("#maxac").html(maxac);
+    }
+    let ro = eventData.rotationRate;
+    $("#a").html(ro.alpha);
+    $("#b").html(ro.beta);
+    $("#c").html(ro.gamma);
+    let gac = eventData.accelerationIncludingGravity;
+    // console.log(gac);
+    $("#gx").html(gac.x);
+    $("#gy").html(gac.y);
+    $("#gz").html(gac.z);
+
+    if (gac.z > 8) {  // 手机基本水平状态
+        computeori(gac.x, gac.y, gac.z);
+    }
 }
 $(function() {
     let url = location.protocol + '//' + document.domain + ':' + location.port + '/';
@@ -110,42 +159,12 @@ $(function() {
     socketio.on('disconnect', function(socket) {
         console.error('onedawn disconnect from server');
     });
-    function deviceMotionHeadler(eventData){
-        cnt += 1;
-        // console.log(eventData);
-        let ac = eventData.acceleration
-        $("#x").html(ac.x);
-        $("#y").html(ac.y);
-        $("#z").html(ac.z);
-        let acval = Math.sqrt(ac.x*ac.x + ac.y*ac.y + ac.z*ac.z);
-        if (acval > maxac) {
-            maxac = acval;
-            $("#maxac").html(maxac);
-        }
-        let ro = eventData.rotationRate;
-        $("#a").html(ro.alpha);
-        $("#b").html(ro.beta);
-        $("#c").html(ro.gamma);
-        let gac = eventData.accelerationIncludingGravity;
-        // console.log(gac);
-        $("#gx").html(gac.x);
-        $("#gy").html(gac.y);
-        $("#gz").html(gac.z);
-
-        if (gac.z > 8) {  // 手机基本水平状态
-            computeori(gac.x, gac.y, gac.z);
-        }
-    }
     window.addEventListener('devicemotion', deviceMotionHeadler, false);
 })
 setInterval(function() {
     $("#fps").html(cnt);
     cnt = 0;
 }, 1000);
-
-function updatedraw() {
-
-}
 
 var scw;
 var sch;
@@ -159,6 +178,7 @@ var spleft = 0;
 var upds = false;
 var to0ratio = 0.3;
 function mtmove(e) {
+    if (mode != "touch") return;
     if (ispressed) {
         // console.log(e);
         moved = true;
@@ -187,20 +207,36 @@ function mtmove(e) {
     }
 }
 function mtstart(e) {
+    if (mode != "touch") return;
     // console.log(e)
     moved = false;
     ispressed = true;
 }
+function speedinit() {
+    ball.css('top', sch/2 - 30);
+    ball.css('left', scw/2 - 30);
+    spfront = 0;
+    spleft = 0;
+    upds = true;
+}
 function mtend(e) {
+    if (mode != "touch") return;
     // console.log(e)
     ispressed = false;
     if (Math.sqrt(spfront*spfront + spleft*spleft) <= to0ratio) {
-        ball.css('top', sch/2 - 30);
-        ball.css('left', scw/2 - 30);
-        spfront = 0;
-        spleft = 0;
-        upds = true;
+        speedinit();
     }
+}
+function togglemode() {
+    if (mode == "touch") {
+        mode = "gravity"
+        ball.css('background-color', "red");
+    } else {
+        mode = "touch"
+        ball.css('background-color', "green");
+    }
+    speedinit();
+    $("#cmode").html(mode);
 }
 $(function() {
     scw = $("body").width();
@@ -222,16 +258,7 @@ $(function() {
     $("#fixball").css("left", scw/2 - 30);
     $("#fixball").css("top", sch/2 - 30);
     ball.on('click', function () {
-        if (!moved) {
-            if (mode == "touch") {
-                mode = "gravity"
-                ball.css('background-color', "red");
-            } else {
-                mode = "touch"
-                ball.css('background-color', "green");
-            }
-            $("#cmode").html(mode);
-        }
+        if (!moved) togglemode();
     });
     $("body").on('mousemove', mtmove);
     $("body").on('touchmove', mtmove);
