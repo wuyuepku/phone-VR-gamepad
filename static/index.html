@@ -159,6 +159,9 @@ $(function() {
     socketio.on('disconnect', function(socket) {
         console.error('onedawn disconnect from server');
     });
+    socketio.on('title', function(msg) {
+        console.log(msg);
+    });
     window.addEventListener('devicemotion', deviceMotionHeadler, false);
 })
 setInterval(function() {

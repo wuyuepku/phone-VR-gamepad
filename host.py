@@ -22,6 +22,13 @@ def ws_disconnect():
 def ws_xy(data):
     print(data)
 
+def new_thread():
+    print("new thread is running!")
+    while True:
+        time.sleep(2)
+        socketio.emit("title", {"Hello": "World"}, broadcast=True)
+socketio.start_background_task(new_thread)
+
 if __name__=='__main__':
     parser = OptionParser()
     parser.add_option("--host", type="string", dest="host", help="Server Host IP", default="0.0.0.0")
